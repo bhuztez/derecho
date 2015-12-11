@@ -1,5 +1,7 @@
 -module(auction).
 
+-compile({parse_transform, streams}).
+
 -export([start/0, init/0, stop/0, loop/3]).
 
 
@@ -19,10 +21,19 @@ init() ->
     controller:create_stream(Pid, bid_price),
 
     Query =
-        [ {0, input, bid},
-          {1, operator, op_groupby, [0], {item, op_aggregate, aggregate:max(price)}},
-          {2, output, bid_price, [1]}
-        ],
+        streams:query(
+          fun (Bid) ->
+                  Price =
+                      streams:groupby(
+                        fun(P) ->
+                                streams:aggregate(aggregate:max(price), P)
+                        end,
+                        item,
+                        Bid),
+                  {Price}
+          end,
+          [bid],
+          [bid_price]),
 
     controller:create_query(Pid, Query),
     {ok, PricePid} = controller:lookup_stream(Pid, bid_price),
